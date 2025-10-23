@@ -2,7 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import {
   Bold,
   Italic,
-  Underline,
+  Strikethrough,
   List,
   ListOrdered,
   Quote,
@@ -62,44 +62,44 @@ export default function RichTextEditor({ content, onChange }: Props) {
       const currentLine = text.substring(lineStart, lineEnd === -1 ? text.length : lineEnd);
 
       setActiveFormats({
-        bold: /\*\*([^*]+)\*\*/.test(selectedText) || isWithinPattern(text, start, end, '**', '**'),
-        italic: /\*([^*]+)\*/.test(selectedText) || isWithinPattern(text, start, end, '*', '*'),
-        strikethrough: /~~([^~]+)~~/.test(selectedText) || isWithinPattern(text, start, end, '~~', '~~'),
+        bold: isWrappedWith(text, start, end, '**', '**'),
+        italic: isWrappedWith(text, start, end, '*', '*') && !isWrappedWith(text, start, end, '**', '**'),
+        strikethrough: isWrappedWith(text, start, end, '~~', '~~'),
         heading1: currentLine.trimStart().startsWith('# '),
         heading2: currentLine.trimStart().startsWith('## '),
         heading3: currentLine.trimStart().startsWith('### '),
         bulletList: currentLine.trimStart().startsWith('- '),
         numberedList: /^\d+\.\s/.test(currentLine.trimStart()),
         quote: currentLine.trimStart().startsWith('> '),
-        code: /`([^`]+)`/.test(selectedText) || isWithinPattern(text, start, end, '`', '`'),
+        code: isWrappedWith(text, start, end, '`', '`'),
       });
     };
 
     detectFormatting();
   }, [content, editorRef.current?.selectionStart, editorRef.current?.selectionEnd]);
 
-  // Helper function to check if cursor is within a pattern
-  const isWithinPattern = (text: string, start: number, end: number, openPattern: string, closePattern: string): boolean => {
+  // Helper function to check if cursor/selection is within a pattern
+  const isWrappedWith = (text: string, start: number, end: number, openPattern: string, closePattern: string): boolean => {
     // Look backwards for opening pattern
     let openIndex = -1;
-    for (let i = start - 1; i >= 0; i--) {
+    for (let i = start - 1; i >= Math.max(0, start - 100); i--) {
       if (text.substring(i, i + openPattern.length) === openPattern) {
         openIndex = i;
         break;
       }
-      // Stop if we hit a newline
-      if (text[i] === '\n') break;
+      // Stop if we hit a newline (except for bold/italic)
+      if (text[i] === '\n' && openPattern !== '**' && openPattern !== '*') break;
     }
 
     // Look forwards for closing pattern
     let closeIndex = -1;
-    for (let i = end; i < text.length; i++) {
+    for (let i = end; i < Math.min(text.length, end + 100); i++) {
       if (text.substring(i, i + closePattern.length) === closePattern) {
         closeIndex = i;
         break;
       }
-      // Stop if we hit a newline
-      if (text[i] === '\n') break;
+      // Stop if we hit a newline (except for bold/italic)
+      if (text[i] === '\n' && closePattern !== '**' && closePattern !== '*') break;
     }
 
     return openIndex !== -1 && closeIndex !== -1 && openIndex < start && closeIndex >= end;
@@ -175,25 +175,76 @@ export default function RichTextEditor({ content, onChange }: Props) {
     }
 
     // Ctrl/Cmd + Shift + Z or Ctrl/Cmd + Y for redo
-    if ((e.ctrlKey || e.metaKey) && (e.shiftKey && e.key === 'z' || e.key === 'y')) {
+    if ((e.ctrlKey || e.metaKey) && ((e.shiftKey && e.key === 'z') || e.key === 'y')) {
       e.preventDefault();
       handleRedo();
       return;
     }
 
-    // Trigger formatting detection on selection change
+    // Ctrl/Cmd + B for bold
+    if ((e.ctrlKey || e.metaKey) && e.key === 'b') {
+      e.preventDefault();
+      toggleFormat('**', '**');
+      return;
+    }
+
+    // Ctrl/Cmd + I for italic
+    if ((e.ctrlKey || e.metaKey) && e.key === 'i') {
+      e.preventDefault();
+      toggleFormat('*', '*');
+      return;
+    }
+  };
+
+  // Toggle format - removes if already applied, adds if not
+  const toggleFormat = (before: string, after: string = '') => {
+    const textarea = editorRef.current;
+    if (!textarea) return;
+
+    const start = textarea.selectionStart;
+    const end = textarea.selectionEnd;
+    const text = content;
+    const selectedText = text.substring(start, end);
+
+    // Check if the selection is already wrapped
+    const beforeText = text.substring(Math.max(0, start - before.length), start);
+    const afterText = text.substring(end, Math.min(text.length, end + after.length));
+
+    let newText: string;
+    let newCursorStart: number;
+    let newCursorEnd: number;
+
+    if (beforeText === before && afterText === after) {
+      // Remove formatting
+      newText =
+        text.substring(0, start - before.length) +
+        selectedText +
+        text.substring(end + after.length);
+
+      newCursorStart = start - before.length;
+      newCursorEnd = end - before.length;
+    } else {
+      // Add formatting
+      const textToWrap = selectedText || 'text';
+      newText =
+        text.substring(0, start) +
+        before + textToWrap + after +
+        text.substring(end);
+
+      newCursorStart = start + before.length;
+      newCursorEnd = start + before.length + textToWrap.length;
+    }
+
+    handleContentChange(newText);
+
+    // Set cursor position
     setTimeout(() => {
-      const textarea = editorRef.current;
-      if (textarea) {
-        const start = textarea.selectionStart;
-        const end = textarea.selectionEnd;
-        // Force re-render to update active formats
-        setActiveFormats(prev => ({ ...prev }));
-      }
+      textarea.focus();
+      textarea.setSelectionRange(newCursorStart, newCursorEnd);
     }, 0);
   };
 
-  // Simple toolbar actions
+  // Insert format without toggle (for headings, lists, etc.)
   const insertFormat = (before: string, after: string = '') => {
     const textarea = editorRef.current;
     if (!textarea) return;
@@ -283,10 +334,10 @@ export default function RichTextEditor({ content, onChange }: Props) {
 
         <div className="mx-1 h-6 w-px bg-gray-300 dark:bg-gray-600" />
 
-        {/* Text formatting */}
+        {/* Text formatting with TOGGLE functionality */}
         <button
           type="button"
-          onClick={() => insertFormat('**', '**')}
+          onClick={() => toggleFormat('**', '**')}
           className={getButtonClass(activeFormats.bold)}
           title="Bold (Ctrl+B)"
         >
@@ -294,7 +345,7 @@ export default function RichTextEditor({ content, onChange }: Props) {
         </button>
         <button
           type="button"
-          onClick={() => insertFormat('*', '*')}
+          onClick={() => toggleFormat('*', '*')}
           className={getButtonClass(activeFormats.italic)}
           title="Italic (Ctrl+I)"
         >
@@ -302,11 +353,11 @@ export default function RichTextEditor({ content, onChange }: Props) {
         </button>
         <button
           type="button"
-          onClick={() => insertFormat('~~', '~~')}
+          onClick={() => toggleFormat('~~', '~~')}
           className={getButtonClass(activeFormats.strikethrough)}
           title="Strikethrough"
         >
-          <Underline className="h-4 w-4" />
+          <Strikethrough className="h-4 w-4" />
         </button>
 
         <div className="mx-1 h-6 w-px bg-gray-300 dark:bg-gray-600" />
@@ -338,7 +389,7 @@ export default function RichTextEditor({ content, onChange }: Props) {
         </button>
         <button
           type="button"
-          onClick={() => insertFormat('`', '`')}
+          onClick={() => toggleFormat('`', '`')}
           className={getButtonClass(activeFormats.code)}
           title="Inline Code"
         >
@@ -374,7 +425,7 @@ export default function RichTextEditor({ content, onChange }: Props) {
         onKeyDown={handleKeyDown}
         onMouseUp={() => {
           // Update active formats when selection changes via mouse
-          setTimeout(() => setActiveFormats(prev => ({ ...prev })), 0);
+          setTimeout(() => setActiveFormats((prev) => ({ ...prev })), 0);
         }}
         className="w-full min-h-[400px] resize-y border-0 bg-white p-4 text-gray-900 focus:ring-0 dark:bg-gray-700 dark:text-white font-mono text-sm"
         placeholder="Write your content here... (Markdown supported)"
@@ -383,13 +434,13 @@ export default function RichTextEditor({ content, onChange }: Props) {
 
       {/* Footer with stats and shortcuts */}
       <div className="flex items-center justify-between border-t border-gray-300 bg-gray-50 px-4 py-2 dark:border-gray-600 dark:bg-gray-800">
-        <div className="text-xs text-gray-500 dark:text-gray-400">
-          {content.length} characters
-        </div>
+        <div className="text-xs text-gray-500 dark:text-gray-400">{content.length} characters</div>
         <div className="flex items-center gap-3 text-xs text-gray-500 dark:text-gray-400">
-          <span className="hidden sm:inline">Ctrl+Z: Undo</span>
+          <span className="hidden sm:inline">Ctrl+B: Bold</span>
           <span className="hidden sm:inline">•</span>
-          <span className="hidden sm:inline">Ctrl+Shift+Z: Redo</span>
+          <span className="hidden sm:inline">Ctrl+I: Italic</span>
+          <span className="hidden sm:inline">•</span>
+          <span className="hidden sm:inline">Ctrl+Z: Undo</span>
         </div>
       </div>
     </div>

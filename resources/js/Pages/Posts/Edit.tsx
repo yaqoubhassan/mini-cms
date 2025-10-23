@@ -86,7 +86,6 @@ export default function Edit({ post, categories }: Props) {
     if (data.published_at) formData.append('published_at', data.published_at);
 
     submit(route('posts.update', post.id), {
-      data: formData,
       forceFormData: true,
     });
   };

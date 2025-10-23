@@ -4,6 +4,7 @@ import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import RichTextEditor from '@/Components/Posts/RichTextEditor';
 import ImageUpload from '@/Components/Posts/ImageUpload';
 import TagsInput from '@/Components/Posts/TagsInput';
+import axios from 'axios';
 import {
   Save,
   X,
@@ -59,7 +60,6 @@ export default function Create({ categories }: Props) {
     if (data.published_at) formData.append('published_at', data.published_at);
 
     post(route('posts.store'), {
-      data: formData,
       forceFormData: true,
     });
   };
@@ -100,23 +100,21 @@ export default function Create({ categories }: Props) {
 
     setAiLoading(true);
     try {
-      const response = await fetch(route('ai.suggest'), {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-          'X-CSRF-TOKEN': document.querySelector('meta[name="csrf-token"]')?.getAttribute('content') || '',
-        },
-        body: JSON.stringify({ prompt: aiPrompt }),
+      const response = await axios.post(route('ai.suggest'), {
+        prompt: aiPrompt,
+        type: 'content', // Required parameter
+        context: data.title || '', // Optional: provide context
       });
 
-      const result = await response.json();
-      if (result.content) {
-        setData('body', data.body + '\n\n' + result.content);
+      if (response.data.success && response.data.text) {
+        setData('body', data.body + '\n\n' + response.data.text);
         setShowAIAssistant(false);
         setAiPrompt('');
       }
-    } catch (error) {
+    } catch (error: any) {
       console.error('AI generation failed:', error);
+      const message = error.response?.data?.message || error.response?.data?.error || 'Failed to generate content';
+      alert(message);
     } finally {
       setAiLoading(false);
     }
