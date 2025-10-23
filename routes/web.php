@@ -28,6 +28,8 @@ Route::middleware('auth')->group(function () {
 
     // Posts
     Route::resource('posts', PostController::class);
+    Route::post('posts/bulk-delete', [PostController::class, 'bulkDelete'])->name('posts.bulk-delete');
+    Route::post('posts/bulk-status', [PostController::class, 'bulkUpdateStatus'])->name('posts.bulk-status');
 
     // Categories
     Route::resource('categories', CategoryController::class);

@@ -142,7 +142,7 @@ export default function Dashboard({
                     usePointStyle: true,
                     font: {
                         size: 12,
-                        weight: '500' as const,
+                        weight: 500,
                     },
                 },
             },
