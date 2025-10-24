@@ -113,7 +113,7 @@ export default function Create({ categories }: Props) {
     setData('slug', generateSlug(data.title));
   };
 
-  // AI Content Generation
+  // AI Content Generation - FIXED VERSION
   const handleAIGenerate = async () => {
     if (!aiPrompt.trim()) {
       toast.error('Please enter a prompt');
@@ -124,11 +124,13 @@ export default function Create({ categories }: Props) {
     try {
       const response = await axios.post(route('ai.suggest'), {
         prompt: aiPrompt,
+        type: 'content', // FIXED: Added required type field
         context: data.body,
       });
 
-      if (response.data.content) {
-        setData('body', data.body + '\n\n' + response.data.content);
+      // FIXED: Changed from response.data.content to response.data.text
+      if (response.data.text) {
+        setData('body', data.body + '\n\n' + response.data.text);
         setShowAIAssistant(false);
         setAiPrompt('');
         toast.success('AI content generated!');
@@ -251,12 +253,22 @@ export default function Create({ categories }: Props) {
                         disabled={aiLoading || !aiPrompt.trim()}
                         className="flex-1 rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-purple-700 disabled:opacity-50"
                       >
-                        {aiLoading ? 'Generating...' : 'Generate Content'}
+                        {aiLoading ? (
+                          <div className="flex items-center justify-center gap-2">
+                            <div className="h-4 w-4 animate-spin rounded-full border-2 border-white border-t-transparent" />
+                            Generating...
+                          </div>
+                        ) : (
+                          'Generate Content'
+                        )}
                       </button>
                       <button
                         type="button"
-                        onClick={() => setShowAIAssistant(false)}
-                        className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300"
+                        onClick={() => {
+                          setShowAIAssistant(false);
+                          setAiPrompt('');
+                        }}
+                        className="rounded-lg border border-purple-300 bg-white px-4 py-2 text-sm font-semibold text-purple-700 transition-colors hover:bg-purple-50 dark:border-purple-700 dark:bg-gray-800 dark:text-purple-300 dark:hover:bg-gray-700"
                       >
                         Cancel
                       </button>
@@ -272,93 +284,76 @@ export default function Create({ categories }: Props) {
                   <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.body}</p>
                 )}
               </div>
-            </div>
-          </div>
 
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Featured Image */}
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-              <h3 className="mb-4 text-sm font-semibold text-gray-900 dark:text-white">
-                Featured Image
-              </h3>
-              <ImageUpload
-                image={data.featured_image}
-                onChange={(file) => setData('featured_image', file)}
-                onRemove={() => setData('featured_image', null)}
-              />
-              {errors.featured_image && (
-                <p className="mt-2 text-sm text-red-600 dark:text-red-400">
-                  {errors.featured_image}
-                </p>
-              )}
-            </div>
+              {/* Category */}
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Category
+                </label>
+                <select
+                  value={data.category_id}
+                  onChange={(e) => setData('category_id', e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                >
+                  <option value="">Select a category</option>
+                  {categories.map((category) => (
+                    <option key={category.id} value={category.id}>
+                      {category.name}
+                    </option>
+                  ))}
+                </select>
+                {errors.category_id && (
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                    {errors.category_id}
+                  </p>
+                )}
+              </div>
 
-            {/* Post Settings */}
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-              <h3 className="mb-4 text-sm font-semibold text-gray-900 dark:text-white">
-                Post Settings
-              </h3>
-              <div className="space-y-4">
-                {/* Category */}
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Category
-                  </label>
-                  <select
-                    value={data.category_id}
-                    onChange={(e) => setData('category_id', e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                  >
-                    <option value="">Select category</option>
-                    {categories.map((category) => (
-                      <option key={category.id} value={category.id}>
-                        {category.name}
-                      </option>
-                    ))}
-                  </select>
-                </div>
+              {/* Tags */}
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Tags
+                </label>
+                <TagsInput
+                  tags={data.tags}
+                  onChange={(tags) => setData('tags', tags)}
+                />
+                {errors.tags && (
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.tags}</p>
+                )}
+              </div>
 
-                {/* Tags */}
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Tags
-                  </label>
-                  <TagsInput
-                    tags={data.tags}
-                    onChange={(tags) => setData('tags', tags)}
-                  />
-                </div>
+              {/* Featured Image */}
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Featured Image
+                </label>
+                <ImageUpload
+                  image={data.featured_image}
+                  onChange={(file) => setData('featured_image', file)}
+                />
+                {errors.featured_image && (
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                    {errors.featured_image}
+                  </p>
+                )}
+              </div>
 
-                {/* Status */}
-                <div>
-                  <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Status
-                  </label>
-                  <select
-                    value={data.status}
-                    onChange={(e) => setData('status', e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                  >
-                    <option value="draft">Draft</option>
-                    <option value="published">Published</option>
-                    <option value="archived">Archived</option>
-                  </select>
-                </div>
-
-                {/* Publish Date (optional) */}
-                {data.status === 'published' && (
-                  <div>
-                    <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Publish Date
-                    </label>
-                    <input
-                      type="datetime-local"
-                      value={data.published_at}
-                      onChange={(e) => setData('published_at', e.target.value)}
-                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                    />
-                  </div>
+              {/* Publish Date */}
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Publish Date (Optional)
+                </label>
+                <input
+                  type="datetime-local"
+                  value={data.published_at}
+                  onChange={(e) => setData('published_at', e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                />
+                {errors.published_at && (
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">
+                    {errors.published_at}
+                  </p>
                 )}
               </div>
             </div>

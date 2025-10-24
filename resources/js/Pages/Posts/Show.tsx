@@ -243,7 +243,7 @@ export default function Show({ post }: Props) {
           </div>
 
           {/* Post Body */}
-          <div className="prose prose-lg max-w-none p-6 dark:prose-invert">
+          <div className="prose prose-lg max-w-none p-6 dark:prose-invert dark:text-white">
             <ReactMarkdown remarkPlugins={[remarkGfm]}>
               {post.body}
             </ReactMarkdown>
