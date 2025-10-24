@@ -1,9 +1,22 @@
+import { useState, useEffect } from 'react';
+import { Head, Link, router, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
-import { Head, Link } from '@inertiajs/react';
-import { ArrowLeft, Calendar, User, FolderOpen, Tag, MessageSquare, Edit, Trash2 } from 'lucide-react';
-import { useState } from 'react';
+import ConfirmModal from '@/Components/ConfirmModal';
+import toast from 'react-hot-toast';
 import ReactMarkdown from 'react-markdown';
 import remarkGfm from 'remark-gfm';
+import {
+  ArrowLeft,
+  Calendar,
+  User,
+  FolderOpen,
+  Tag,
+  MessageSquare,
+  Edit,
+  Trash2,
+  Eye,
+  Clock,
+} from 'lucide-react';
 
 interface Post {
   id: number;
@@ -43,7 +56,21 @@ interface Props {
 }
 
 export default function Show({ post }: Props) {
-  const [showDeleteModal, setShowDeleteModal] = useState(false);
+  const { flash } = usePage().props as any;
+  const [deleteModal, setDeleteModal] = useState({
+    isOpen: false,
+    isDeleting: false,
+  });
+
+  // Show flash messages
+  useEffect(() => {
+    if (flash?.success) {
+      toast.success(flash.success);
+    }
+    if (flash?.error) {
+      toast.error(flash.error);
+    }
+  }, [flash]);
 
   const formatDate = (dateString: string) => {
     return new Date(dateString).toLocaleDateString('en-US', {
@@ -62,19 +89,55 @@ export default function Show({ post }: Props) {
     return badges[status as keyof typeof badges] || badges.draft;
   };
 
-  const handleDelete = () => {
-    if (confirm('Are you sure you want to delete this post? This action cannot be undone.')) {
-      // Using Inertia's router for delete
-      window.location.href = `/posts/${post.id}`;
+  const getCommentStatusBadge = (status: string) => {
+    const badges = {
+      approved: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-400',
+      pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-400',
+      rejected: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-400',
+    };
+    return badges[status as keyof typeof badges] || badges.pending;
+  };
+
+  // Open delete modal
+  const openDeleteModal = () => {
+    setDeleteModal({
+      isOpen: true,
+      isDeleting: false,
+    });
+  };
+
+  // Close delete modal
+  const closeDeleteModal = () => {
+    if (!deleteModal.isDeleting) {
+      setDeleteModal({
+        isOpen: false,
+        isDeleting: false,
+      });
     }
   };
 
-  const approvedComments = post.comments.filter(comment => comment.status === 'approved');
+  // Handle delete
+  const handleDelete = () => {
+    setDeleteModal((prev) => ({ ...prev, isDeleting: true }));
+
+    router.delete(route('posts.destroy', post.id), {
+      onSuccess: () => {
+        // Will redirect to posts index
+      },
+      onError: () => {
+        setDeleteModal((prev) => ({ ...prev, isDeleting: false }));
+        toast.error('Failed to delete post. Please try again.');
+      },
+    });
+  };
 
   return (
-    <AuthenticatedLayout
-      header={
-        <div className="flex items-center justify-between">
+    <AuthenticatedLayout>
+      <Head title={post.title} />
+
+      <div className="mx-auto max-w-4xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+        {/* Header */}
+        <div className="flex items-start justify-between gap-4">
           <div className="flex items-center gap-4">
             <Link
               href={route('posts.index')}
@@ -83,265 +146,206 @@ export default function Show({ post }: Props) {
               <ArrowLeft className="h-5 w-5" />
             </Link>
             <div>
-              <h2 className="text-2xl font-bold leading-tight text-gray-800 dark:text-gray-200">
-                View Post
-              </h2>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">
+                Post Details
+              </h1>
               <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                {post.title}
+                View and manage post content
               </p>
             </div>
           </div>
-          <div className="flex gap-2">
+          <div className="flex items-center gap-2">
             <Link
               href={route('posts.edit', post.id)}
-              className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-indigo-700"
+              className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-500"
             >
               <Edit className="h-4 w-4" />
               Edit
             </Link>
             <button
-              onClick={() => setShowDeleteModal(true)}
-              className="inline-flex items-center gap-2 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
+              onClick={openDeleteModal}
+              className="inline-flex items-center gap-2 rounded-lg border border-red-300 bg-white px-4 py-2 text-sm font-semibold text-red-600 transition-colors hover:bg-red-50 dark:border-red-800 dark:bg-gray-800 dark:text-red-400 dark:hover:bg-red-900/20"
             >
               <Trash2 className="h-4 w-4" />
               Delete
             </button>
           </div>
         </div>
-      }
-    >
-      <Head title={post.title} />
 
-      <div className="mx-auto max-w-7xl space-y-6">
-        <div className="grid gap-6 lg:grid-cols-3">
-          {/* Main Content */}
-          <div className="lg:col-span-2 space-y-6">
-            {/* Post Header */}
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-              <div className="mb-4">
-                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-                  {post.title}
-                </h1>
-              </div>
+        {/* Post Content */}
+        <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          {/* Featured Image */}
+          {post.featured_image && (
+            <div className="aspect-video w-full overflow-hidden">
+              <img
+                src={`/storage/${post.featured_image}`}
+                alt={post.title}
+                className="h-full w-full object-cover"
+              />
+            </div>
+          )}
 
-              {/* Meta Information */}
-              <div className="flex flex-wrap items-center gap-4 border-b border-gray-200 pb-4 dark:border-gray-700">
-                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                  <User className="h-4 w-4" />
-                  <span>{post.user.name}</span>
-                </div>
-                <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                  <Calendar className="h-4 w-4" />
-                  <span>{formatDate(post.published_at || post.created_at)}</span>
-                </div>
-                {post.category && (
-                  <div className="flex items-center gap-2 text-sm">
-                    <FolderOpen className="h-4 w-4 text-indigo-600 dark:text-indigo-400" />
-                    <span className="text-indigo-600 dark:text-indigo-400">
-                      {post.category.name}
-                    </span>
-                  </div>
-                )}
-                <span
-                  className={`ml-auto inline-flex rounded-full px-3 py-1 text-xs font-semibold capitalize ${getStatusBadge(post.status)}`}
-                >
-                  {post.status}
+          {/* Post Header */}
+          <div className="border-b border-gray-200 p-6 dark:border-gray-700">
+            <div className="mb-4 flex items-center gap-2">
+              <span className={`inline-flex items-center rounded-full px-3 py-1 text-xs font-medium ${getStatusBadge(post.status)}`}>
+                {post.status.charAt(0).toUpperCase() + post.status.slice(1)}
+              </span>
+              {post.category && (
+                <span className="inline-flex items-center gap-1 rounded-full bg-purple-100 px-3 py-1 text-xs font-medium text-purple-800 dark:bg-purple-900/30 dark:text-purple-400">
+                  <FolderOpen className="h-3 w-3" />
+                  {post.category.name}
                 </span>
-              </div>
-
-              {/* Tags */}
-              {post.tags && post.tags.length > 0 && (
-                <div className="flex flex-wrap gap-2 border-b border-gray-200 py-4 dark:border-gray-700">
-                  <Tag className="h-4 w-4 text-gray-400" />
-                  {post.tags.map((tag, index) => (
-                    <span
-                      key={index}
-                      className="inline-flex items-center rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700 dark:bg-gray-700 dark:text-gray-300"
-                    >
-                      {tag}
-                    </span>
-                  ))}
-                </div>
               )}
-
-              {/* Featured Image */}
-              {post.featured_image && (
-                <div className="my-6">
-                  <img
-                    src={`/storage/${post.featured_image}`}
-                    alt={post.title}
-                    className="w-full rounded-lg object-cover"
-                  />
-                </div>
-              )}
-
-              {/* Post Body */}
-              <div className="prose prose-lg dark:prose-invert max-w-none pt-6 dark:text-white">
-                <ReactMarkdown remarkPlugins={[remarkGfm]}>
-                  {post.body}
-                </ReactMarkdown>
-              </div>
             </div>
 
-            {/* Comments Section */}
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-              <div className="mb-4 flex items-center gap-2">
-                <MessageSquare className="h-5 w-5 text-gray-600 dark:text-gray-400" />
-                <h3 className="text-lg font-semibold text-gray-900 dark:text-white">
-                  Comments ({approvedComments.length})
-                </h3>
-              </div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+              {post.title}
+            </h1>
 
-              {approvedComments.length > 0 ? (
-                <div className="space-y-4">
-                  {approvedComments.map((comment) => (
-                    <div
-                      key={comment.id}
-                      className="rounded-lg border border-gray-200 bg-gray-50 p-4 dark:border-gray-700 dark:bg-gray-900"
-                    >
-                      <div className="mb-2 flex items-center justify-between">
-                        <div className="flex items-center gap-2">
-                          <User className="h-4 w-4 text-gray-600 dark:text-gray-400" />
-                          <span className="font-medium text-gray-900 dark:text-white">
-                            {comment.user.name}
-                          </span>
+            <div className="mt-4 flex flex-wrap items-center gap-4 text-sm text-gray-600 dark:text-gray-400">
+              <div className="flex items-center gap-2">
+                <User className="h-4 w-4" />
+                <span>By {post.user.name}</span>
+              </div>
+              <div className="flex items-center gap-2">
+                <Calendar className="h-4 w-4" />
+                <span>Created {formatDate(post.created_at)}</span>
+              </div>
+              {post.published_at && (
+                <div className="flex items-center gap-2">
+                  <Clock className="h-4 w-4" />
+                  <span>Published {formatDate(post.published_at)}</span>
+                </div>
+              )}
+              {post.comments.length > 0 && (
+                <div className="flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4" />
+                  <span>{post.comments.length} comment{post.comments.length !== 1 ? 's' : ''}</span>
+                </div>
+              )}
+            </div>
+
+            {/* Tags */}
+            {post.tags && post.tags.length > 0 && (
+              <div className="mt-4 flex flex-wrap items-center gap-2">
+                <Tag className="h-4 w-4 text-gray-400" />
+                {post.tags.map((tag, index) => (
+                  <span
+                    key={index}
+                    className="rounded-full bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700 dark:bg-gray-700 dark:text-gray-300"
+                  >
+                    {tag}
+                  </span>
+                ))}
+              </div>
+            )}
+          </div>
+
+          {/* Post Body */}
+          <div className="prose prose-lg max-w-none p-6 dark:prose-invert">
+            <ReactMarkdown remarkPlugins={[remarkGfm]}>
+              {post.body}
+            </ReactMarkdown>
+          </div>
+        </div>
+
+        {/* Comments Section */}
+        {post.comments.length > 0 && (
+          <div className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <div className="border-b border-gray-200 px-6 py-4 dark:border-gray-700">
+              <h2 className="flex items-center gap-2 text-lg font-semibold text-gray-900 dark:text-white">
+                <MessageSquare className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
+                Comments ({post.comments.length})
+              </h2>
+            </div>
+            <div className="divide-y divide-gray-200 dark:divide-gray-700">
+              {post.comments.map((comment) => (
+                <div key={comment.id} className="p-6">
+                  <div className="flex items-start justify-between gap-4">
+                    <div className="flex-1">
+                      <div className="flex items-center gap-3">
+                        <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-sm font-semibold text-white">
+                          {comment.user.name.charAt(0).toUpperCase()}
                         </div>
-                        <span className="text-xs text-gray-500 dark:text-gray-400">
-                          {formatDate(comment.created_at)}
-                        </span>
+                        <div>
+                          <div className="font-medium text-gray-900 dark:text-white">
+                            {comment.user.name}
+                          </div>
+                          <div className="text-sm text-gray-500 dark:text-gray-400">
+                            {formatDate(comment.created_at)}
+                          </div>
+                        </div>
                       </div>
-                      <p className="text-gray-700 dark:text-gray-300">
+                      <p className="mt-3 text-gray-700 dark:text-gray-300">
                         {comment.content}
                       </p>
                     </div>
-                  ))}
-                </div>
-              ) : (
-                <p className="text-center text-gray-500 dark:text-gray-400">
-                  No comments yet. Be the first to comment!
-                </p>
-              )}
-            </div>
-          </div>
-
-          {/* Sidebar */}
-          <div className="space-y-6">
-            {/* Post Information */}
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-              <h3 className="mb-4 text-sm font-semibold text-gray-900 dark:text-white">
-                Post Information
-              </h3>
-              <div className="space-y-3 text-sm">
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Status:</span>
-                  <span className={`font-medium capitalize ${post.status === 'published' ? 'text-green-600 dark:text-green-400' : post.status === 'draft' ? 'text-yellow-600 dark:text-yellow-400' : 'text-gray-600 dark:text-gray-400'}`}>
-                    {post.status}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Author:</span>
-                  <span className="font-medium text-gray-900 dark:text-white">
-                    {post.user.name}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Created:</span>
-                  <span className="font-medium text-gray-900 dark:text-white">
-                    {formatDate(post.created_at)}
-                  </span>
-                </div>
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Updated:</span>
-                  <span className="font-medium text-gray-900 dark:text-white">
-                    {formatDate(post.updated_at)}
-                  </span>
-                </div>
-                {post.published_at && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-600 dark:text-gray-400">Published:</span>
-                    <span className="font-medium text-gray-900 dark:text-white">
-                      {formatDate(post.published_at)}
+                    <span className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getCommentStatusBadge(comment.status)}`}>
+                      {comment.status.charAt(0).toUpperCase() + comment.status.slice(1)}
                     </span>
                   </div>
-                )}
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Slug:</span>
-                  <span className="font-mono text-xs font-medium text-gray-900 dark:text-white">
-                    {post.slug}
-                  </span>
                 </div>
-                {post.category && (
-                  <div className="flex justify-between">
-                    <span className="text-gray-600 dark:text-gray-400">Category:</span>
-                    <span className="font-medium text-gray-900 dark:text-white">
-                      {post.category.name}
-                    </span>
-                  </div>
-                )}
-                <div className="flex justify-between">
-                  <span className="text-gray-600 dark:text-gray-400">Comments:</span>
-                  <span className="font-medium text-gray-900 dark:text-white">
-                    {approvedComments.length}
-                  </span>
-                </div>
-              </div>
-            </div>
-
-            {/* Quick Actions */}
-            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-              <h3 className="mb-4 text-sm font-semibold text-gray-900 dark:text-white">
-                Quick Actions
-              </h3>
-              <div className="space-y-2">
-                <Link
-                  href={route('posts.edit', post.id)}
-                  className="flex w-full items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
-                >
-                  <Edit className="h-4 w-4" />
-                  Edit Post
-                </Link>
-                <Link
-                  href={route('posts.index')}
-                  className="flex w-full items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
-                >
-                  <ArrowLeft className="h-4 w-4" />
-                  Back to Posts
-                </Link>
-              </div>
+              ))}
             </div>
           </div>
+        )}
+
+        {/* Metadata */}
+        <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+          <h2 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
+            Metadata
+          </h2>
+          <dl className="grid gap-4 sm:grid-cols-2">
+            <div>
+              <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                Slug
+              </dt>
+              <dd className="mt-1 text-sm text-gray-900 dark:text-white">
+                {post.slug}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                Last Updated
+              </dt>
+              <dd className="mt-1 text-sm text-gray-900 dark:text-white">
+                {formatDate(post.updated_at)}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                Author Email
+              </dt>
+              <dd className="mt-1 text-sm text-gray-900 dark:text-white">
+                {post.user.email}
+              </dd>
+            </div>
+            <div>
+              <dt className="text-sm font-medium text-gray-500 dark:text-gray-400">
+                Post ID
+              </dt>
+              <dd className="mt-1 text-sm text-gray-900 dark:text-white">
+                #{post.id}
+              </dd>
+            </div>
+          </dl>
         </div>
       </div>
 
       {/* Delete Confirmation Modal */}
-      {showDeleteModal && (
-        <div className="fixed inset-0 z-50 flex items-center justify-center bg-black bg-opacity-50 p-4">
-          <div className="w-full max-w-md rounded-xl bg-white p-6 shadow-xl dark:bg-gray-800">
-            <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-              Delete Post
-            </h3>
-            <p className="mb-6 text-gray-600 dark:text-gray-400">
-              Are you sure you want to delete "{post.title}"? This action cannot be undone.
-            </p>
-            <div className="flex gap-3">
-              <button
-                onClick={() => setShowDeleteModal(false)}
-                className="flex-1 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
-              >
-                Cancel
-              </button>
-              <Link
-                href={route('posts.destroy', post.id)}
-                method="delete"
-                as="button"
-                className="flex-1 rounded-lg bg-red-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-red-700"
-              >
-                Delete
-              </Link>
-            </div>
-          </div>
-        </div>
-      )}
+      <ConfirmModal
+        isOpen={deleteModal.isOpen}
+        onClose={closeDeleteModal}
+        onConfirm={handleDelete}
+        title="Delete Post"
+        message={`Are you sure you want to delete "${post.title}"? This action cannot be undone and will permanently remove the post and all its associated data including comments.`}
+        confirmText="Delete Post"
+        cancelText="Cancel"
+        type="danger"
+        isLoading={deleteModal.isDeleting}
+        icon={<Trash2 className="h-6 w-6 text-red-600 dark:text-red-400" />}
+      />
     </AuthenticatedLayout>
   );
 }

@@ -1,6 +1,7 @@
 import { PropsWithChildren, ReactNode, useState, useEffect } from 'react';
 import Header from '@/Components/Header';
 import Sidebar from '@/Components/Sidebar';
+import ToastNotification from '@/Components/Toastnotification';
 
 export default function AuthenticatedLayout({
     header,
@@ -19,6 +20,9 @@ export default function AuthenticatedLayout({
 
     return (
         <div className="min-h-screen bg-gray-50 dark:bg-gray-900">
+            {/* Toast Notifications */}
+            <ToastNotification />
+
             {/* Desktop Sidebar */}
             <Sidebar
                 isCollapsed={isSidebarCollapsed}

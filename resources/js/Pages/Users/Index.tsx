@@ -10,61 +10,41 @@ import {
   Trash2,
   Edit,
   Eye,
-  CheckSquare,
-  Square,
-  X,
+  UserCheck,
+  UserX,
+  Shield,
+  User as UserIcon,
+  Mail,
   Calendar,
-  User,
-  FolderOpen,
-  FileText,
-  Archive,
-  Send,
+  CheckCircle,
+  XCircle,
 } from 'lucide-react';
 
-interface Post {
-  id: number;
-  title: string;
-  slug: string;
-  body: string;
-  status: 'draft' | 'published' | 'archived';
-  featured_image: string | null;
-  category_id: number | null;
-  user_id: number;
-  tags: string[] | null;
-  published_at: string | null;
-  created_at: string;
-  updated_at: string;
-  user: {
-    id: number;
-    name: string;
-  };
-  category: {
-    id: number;
-    name: string;
-  } | null;
-}
-
-interface Category {
+interface User {
   id: number;
   name: string;
-  slug: string;
-  posts_count: number;
+  email: string;
+  email_verified_at: string | null;
+  created_at: string;
+  roles: string[];
 }
 
-interface Author {
+interface Role {
   id: number;
   name: string;
 }
 
 interface Statistics {
   total: number;
-  published: number;
-  draft: number;
-  archived: number;
+  verified: number;
+  unverified: number;
+  admins: number;
+  editors: number;
+  viewers: number;
 }
 
-interface PaginatedPosts {
-  data: Post[];
+interface PaginatedUsers {
+  data: User[];
   links: any[];
   current_page: number;
   last_page: number;
@@ -74,46 +54,32 @@ interface PaginatedPosts {
 
 interface Filters {
   search?: string;
-  category_id?: string;
+  role?: string;
   status?: string;
-  user_id?: string;
   sort_by?: string;
   sort_order?: 'asc' | 'desc';
   per_page?: number;
-  date_from?: string;
-  date_to?: string;
-  [key: string]: string | number | undefined;
+  [key: string]: any;
 }
 
 interface Props {
-  posts: PaginatedPosts;
-  categories: Category[];
-  authors: Author[];
+  users: PaginatedUsers;
+  roles: Role[];
   statistics: Statistics;
   filters: Filters;
 }
 
-export default function Index({ posts, categories, authors, statistics, filters }: Props) {
+export default function Index({ users, roles, statistics, filters }: Props) {
   const { flash } = usePage().props as any;
-  const [selectedPosts, setSelectedPosts] = useState<number[]>([]);
   const [showFilters, setShowFilters] = useState(false);
-  const [showBulkActions, setShowBulkActions] = useState(false);
   const [localFilters, setLocalFilters] = useState<Filters>(filters);
-
-  // Delete modal state
   const [deleteModal, setDeleteModal] = useState<{
     isOpen: boolean;
-    post: Post | null;
+    user: User | null;
     isDeleting: boolean;
   }>({
     isOpen: false,
-    post: null,
-    isDeleting: false,
-  });
-
-  // Bulk delete modal state
-  const [bulkDeleteModal, setBulkDeleteModal] = useState({
-    isOpen: false,
+    user: null,
     isDeleting: false,
   });
 
@@ -127,24 +93,6 @@ export default function Index({ posts, categories, authors, statistics, filters 
     }
   }, [flash]);
 
-  // Handle select all
-  const handleSelectAll = () => {
-    if (selectedPosts.length === posts.data.length) {
-      setSelectedPosts([]);
-    } else {
-      setSelectedPosts(posts.data.map(post => post.id));
-    }
-  };
-
-  // Handle individual selection
-  const handleSelectPost = (postId: number) => {
-    setSelectedPosts(prev =>
-      prev.includes(postId)
-        ? prev.filter(id => id !== postId)
-        : [...prev, postId]
-    );
-  };
-
   // Handle filter changes
   const handleFilterChange = (key: string, value: any) => {
     const newFilters = { ...localFilters, [key]: value };
@@ -153,7 +101,7 @@ export default function Index({ posts, categories, authors, statistics, filters 
 
   // Apply filters
   const applyFilters = () => {
-    router.get(route('posts.index'), localFilters, {
+    router.get(route('users.index'), localFilters, {
       preserveState: true,
       preserveScroll: true,
     });
@@ -163,7 +111,7 @@ export default function Index({ posts, categories, authors, statistics, filters 
   const clearFilters = () => {
     const clearedFilters: Filters = {};
     setLocalFilters(clearedFilters);
-    router.get(route('posts.index'), {}, {
+    router.get(route('users.index'), {}, {
       preserveState: true,
       preserveScroll: true,
     });
@@ -175,109 +123,53 @@ export default function Index({ posts, categories, authors, statistics, filters 
     applyFilters();
   };
 
-  // Open single delete modal
-  const openDeleteModal = (post: Post) => {
+  // Open delete modal
+  const openDeleteModal = (user: User) => {
     setDeleteModal({
       isOpen: true,
-      post,
+      user,
       isDeleting: false,
     });
   };
 
-  // Close single delete modal
+  // Close delete modal
   const closeDeleteModal = () => {
     if (!deleteModal.isDeleting) {
       setDeleteModal({
         isOpen: false,
-        post: null,
+        user: null,
         isDeleting: false,
       });
     }
   };
 
-  // Handle single delete
+  // Handle delete
   const handleDelete = () => {
-    if (!deleteModal.post) return;
+    if (!deleteModal.user) return;
 
     setDeleteModal((prev) => ({ ...prev, isDeleting: true }));
 
-    router.delete(route('posts.destroy', deleteModal.post.id), {
+    router.delete(route('users.destroy', deleteModal.user.id), {
       preserveState: true,
       onSuccess: () => {
         closeDeleteModal();
-        setSelectedPosts(prev => prev.filter(id => id !== deleteModal.post!.id));
       },
       onError: () => {
         setDeleteModal((prev) => ({ ...prev, isDeleting: false }));
-        toast.error('Failed to delete post. Please try again.');
+        toast.error('Failed to delete user. Please try again.');
       },
     });
   };
 
-  // Open bulk delete modal
-  const openBulkDeleteModal = () => {
-    setBulkDeleteModal({
-      isOpen: true,
-      isDeleting: false,
-    });
-  };
-
-  // Close bulk delete modal
-  const closeBulkDeleteModal = () => {
-    if (!bulkDeleteModal.isDeleting) {
-      setBulkDeleteModal({
-        isOpen: false,
-        isDeleting: false,
-      });
-    }
-  };
-
-  // Handle bulk delete
-  const handleBulkDelete = () => {
-    setBulkDeleteModal((prev) => ({ ...prev, isDeleting: true }));
-
-    router.post(
-      route('posts.bulk-delete'),
-      { ids: selectedPosts },
-      {
-        preserveState: true,
-        onSuccess: () => {
-          closeBulkDeleteModal();
-          setSelectedPosts([]);
-          setShowBulkActions(false);
-        },
-        onError: () => {
-          setBulkDeleteModal((prev) => ({ ...prev, isDeleting: false }));
-          toast.error('Failed to delete posts. Please try again.');
-        },
-      }
-    );
-  };
-
-  // Handle bulk status update
-  const handleBulkStatusUpdate = (status: string) => {
-    router.post(
-      route('posts.bulk-status'),
-      { ids: selectedPosts, status },
-      {
-        preserveState: true,
-        onSuccess: () => {
-          setSelectedPosts([]);
-          setShowBulkActions(false);
-        },
-      }
-    );
-  };
-
-  // Get status badge color
-  const getStatusBadgeColor = (status: string) => {
-    switch (status) {
-      case 'published':
+  // Get role badge color
+  const getRoleBadgeColor = (role: string) => {
+    switch (role) {
+      case 'admin':
+        return 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300';
+      case 'editor':
+        return 'bg-blue-100 text-blue-800 dark:bg-blue-900/30 dark:text-blue-300';
+      case 'viewer':
         return 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300';
-      case 'draft':
-        return 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300';
-      case 'archived':
-        return 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300';
       default:
         return 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300';
     }
@@ -286,58 +178,58 @@ export default function Index({ posts, categories, authors, statistics, filters 
   // Statistics cards
   const statCards = [
     {
-      title: 'Total Posts',
+      title: 'Total Users',
       value: statistics.total,
-      icon: FileText,
+      icon: UserIcon,
       color: 'from-blue-500 to-blue-600',
       bgColor: 'bg-blue-50 dark:bg-blue-900/20',
       textColor: 'text-blue-600 dark:text-blue-400',
     },
     {
-      title: 'Published',
-      value: statistics.published,
-      icon: Send,
+      title: 'Verified',
+      value: statistics.verified,
+      icon: UserCheck,
       color: 'from-green-500 to-green-600',
       bgColor: 'bg-green-50 dark:bg-green-900/20',
       textColor: 'text-green-600 dark:text-green-400',
     },
     {
-      title: 'Drafts',
-      value: statistics.draft,
-      icon: Edit,
-      color: 'from-yellow-500 to-yellow-600',
-      bgColor: 'bg-yellow-50 dark:bg-yellow-900/20',
-      textColor: 'text-yellow-600 dark:text-yellow-400',
+      title: 'Unverified',
+      value: statistics.unverified,
+      icon: UserX,
+      color: 'from-orange-500 to-orange-600',
+      bgColor: 'bg-orange-50 dark:bg-orange-900/20',
+      textColor: 'text-orange-600 dark:text-orange-400',
     },
     {
-      title: 'Archived',
-      value: statistics.archived,
-      icon: Archive,
-      color: 'from-gray-500 to-gray-600',
-      bgColor: 'bg-gray-50 dark:bg-gray-900/20',
-      textColor: 'text-gray-600 dark:text-gray-400',
+      title: 'Admins',
+      value: statistics.admins,
+      icon: Shield,
+      color: 'from-red-500 to-red-600',
+      bgColor: 'bg-red-50 dark:bg-red-900/20',
+      textColor: 'text-red-600 dark:text-red-400',
     },
   ];
 
   return (
     <AuthenticatedLayout>
-      <Head title="Posts" />
+      <Head title="Users" />
 
       <div className="mx-auto max-w-7xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
         {/* Header */}
         <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between">
           <div>
-            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Posts</h1>
+            <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Users</h1>
             <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-              Manage your blog posts and content
+              Manage user accounts and permissions
             </p>
           </div>
           <Link
-            href={route('posts.create')}
+            href={route('users.create')}
             className="inline-flex items-center justify-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white shadow-sm transition-colors hover:bg-indigo-500 focus:outline-none focus:ring-2 focus:ring-indigo-500 focus:ring-offset-2 dark:focus:ring-offset-gray-900"
           >
             <Plus className="h-5 w-5" />
-            New Post
+            Add User
           </Link>
         </div>
 
@@ -367,70 +259,6 @@ export default function Index({ posts, categories, authors, statistics, filters 
           ))}
         </div>
 
-        {/* Bulk Actions Bar */}
-        {selectedPosts.length > 0 && (
-          <div className="rounded-xl border border-indigo-200 bg-indigo-50 p-4 dark:border-indigo-800 dark:bg-indigo-900/20">
-            <div className="flex items-center justify-between">
-              <div className="flex items-center gap-4">
-                <span className="text-sm font-medium text-indigo-900 dark:text-indigo-100">
-                  {selectedPosts.length} post{selectedPosts.length !== 1 ? 's' : ''} selected
-                </span>
-                <button
-                  onClick={() => setSelectedPosts([])}
-                  className="text-sm text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300"
-                >
-                  Clear selection
-                </button>
-              </div>
-              <div className="flex items-center gap-2">
-                <div className="relative">
-                  <button
-                    onClick={() => setShowBulkActions(!showBulkActions)}
-                    className="inline-flex items-center gap-2 rounded-lg border border-indigo-300 bg-white px-4 py-2 text-sm font-medium text-indigo-700 transition-colors hover:bg-indigo-50 dark:border-indigo-700 dark:bg-gray-800 dark:text-indigo-400 dark:hover:bg-gray-700"
-                  >
-                    Bulk Actions
-                  </button>
-                  {showBulkActions && (
-                    <div className="absolute right-0 z-10 mt-2 w-56 rounded-lg border border-gray-200 bg-white shadow-lg dark:border-gray-700 dark:bg-gray-800">
-                      <div className="py-1">
-                        <button
-                          onClick={() => handleBulkStatusUpdate('published')}
-                          className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
-                        >
-                          <Send className="h-4 w-4" />
-                          Publish Selected
-                        </button>
-                        <button
-                          onClick={() => handleBulkStatusUpdate('draft')}
-                          className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
-                        >
-                          <Edit className="h-4 w-4" />
-                          Move to Draft
-                        </button>
-                        <button
-                          onClick={() => handleBulkStatusUpdate('archived')}
-                          className="flex w-full items-center gap-2 px-4 py-2 text-sm text-gray-700 hover:bg-gray-100 dark:text-gray-300 dark:hover:bg-gray-700"
-                        >
-                          <Archive className="h-4 w-4" />
-                          Archive Selected
-                        </button>
-                        <div className="border-t border-gray-200 dark:border-gray-700" />
-                        <button
-                          onClick={openBulkDeleteModal}
-                          className="flex w-full items-center gap-2 px-4 py-2 text-sm text-red-700 hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
-                        >
-                          <Trash2 className="h-4 w-4" />
-                          Delete Selected
-                        </button>
-                      </div>
-                    </div>
-                  )}
-                </div>
-              </div>
-            </div>
-          </div>
-        )}
-
         {/* Search and Filters */}
         <div className="rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
           <div className="p-4">
@@ -442,7 +270,7 @@ export default function Index({ posts, categories, authors, statistics, filters 
                   type="text"
                   value={localFilters.search || ''}
                   onChange={(e) => handleFilterChange('search', e.target.value)}
-                  placeholder="Search posts by title..."
+                  placeholder="Search users by name or email..."
                   className="w-full rounded-lg border border-gray-300 bg-white py-2 pl-10 pr-4 text-sm text-gray-900 placeholder-gray-500 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white dark:placeholder-gray-400"
                 />
               </div>
@@ -474,20 +302,20 @@ export default function Index({ posts, categories, authors, statistics, filters 
             {/* Advanced Filters */}
             {showFilters && (
               <div className="mt-4 grid gap-4 border-t border-gray-200 pt-4 dark:border-gray-700 sm:grid-cols-2 lg:grid-cols-4">
-                {/* Category Filter */}
+                {/* Role Filter */}
                 <div>
                   <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Category
+                    Role
                   </label>
                   <select
-                    value={localFilters.category_id || ''}
-                    onChange={(e) => handleFilterChange('category_id', e.target.value)}
+                    value={localFilters.role || ''}
+                    onChange={(e) => handleFilterChange('role', e.target.value)}
                     className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                   >
-                    <option value="">All Categories</option>
-                    {categories.map(category => (
-                      <option key={category.id} value={category.id}>
-                        {category.name} ({category.posts_count})
+                    <option value="">All Roles</option>
+                    {roles.map((role) => (
+                      <option key={role.id} value={role.name}>
+                        {role.name.charAt(0).toUpperCase() + role.name.slice(1)}
                       </option>
                     ))}
                   </select>
@@ -504,28 +332,8 @@ export default function Index({ posts, categories, authors, statistics, filters 
                     className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                   >
                     <option value="">All Status</option>
-                    <option value="published">Published</option>
-                    <option value="draft">Draft</option>
-                    <option value="archived">Archived</option>
-                  </select>
-                </div>
-
-                {/* Author Filter */}
-                <div>
-                  <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Author
-                  </label>
-                  <select
-                    value={localFilters.user_id || ''}
-                    onChange={(e) => handleFilterChange('user_id', e.target.value)}
-                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                  >
-                    <option value="">All Authors</option>
-                    {authors.map(author => (
-                      <option key={author.id} value={author.id}>
-                        {author.name}
-                      </option>
-                    ))}
+                    <option value="verified">Verified</option>
+                    <option value="unverified">Unverified</option>
                   </select>
                 </div>
 
@@ -540,8 +348,23 @@ export default function Index({ posts, categories, authors, statistics, filters 
                     className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
                   >
                     <option value="created_at">Date Created</option>
-                    <option value="title">Title</option>
-                    <option value="published_at">Published Date</option>
+                    <option value="name">Name</option>
+                    <option value="email">Email</option>
+                  </select>
+                </div>
+
+                {/* Sort Order */}
+                <div>
+                  <label className="mb-1.5 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Sort Order
+                  </label>
+                  <select
+                    value={localFilters.sort_order || 'desc'}
+                    onChange={(e) => handleFilterChange('sort_order', e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                  >
+                    <option value="desc">Descending</option>
+                    <option value="asc">Ascending</option>
                   </select>
                 </div>
 
@@ -567,38 +390,23 @@ export default function Index({ posts, categories, authors, statistics, filters 
           </div>
         </div>
 
-        {/* Posts Table */}
+        {/* Users Table */}
         <div className="overflow-hidden rounded-xl border border-gray-200 bg-white shadow-sm dark:border-gray-700 dark:bg-gray-800">
           <div className="overflow-x-auto">
             <table className="w-full">
               <thead className="border-b border-gray-200 bg-gray-50 dark:border-gray-700 dark:bg-gray-900/50">
                 <tr>
-                  <th className="px-6 py-3 text-left">
-                    <button
-                      onClick={handleSelectAll}
-                      className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
-                    >
-                      {selectedPosts.length === posts.data.length ? (
-                        <CheckSquare className="h-5 w-5" />
-                      ) : (
-                        <Square className="h-5 w-5" />
-                      )}
-                    </button>
+                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
+                    User
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                    Post
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                    Author
-                  </th>
-                  <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                    Category
+                    Role
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
                     Status
                   </th>
                   <th className="px-6 py-3 text-left text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
-                    Date
+                    Joined
                   </th>
                   <th className="px-6 py-3 text-right text-xs font-medium uppercase tracking-wider text-gray-500 dark:text-gray-400">
                     Actions
@@ -606,90 +414,77 @@ export default function Index({ posts, categories, authors, statistics, filters 
                 </tr>
               </thead>
               <tbody className="divide-y divide-gray-200 dark:divide-gray-700">
-                {posts.data.length > 0 ? (
-                  posts.data.map((post) => (
+                {users.data.length > 0 ? (
+                  users.data.map((user) => (
                     <tr
-                      key={post.id}
+                      key={user.id}
                       className="transition-colors hover:bg-gray-50 dark:hover:bg-gray-700/50"
                     >
                       <td className="px-6 py-4">
-                        <button
-                          onClick={() => handleSelectPost(post.id)}
-                          className="text-gray-600 hover:text-gray-900 dark:text-gray-400 dark:hover:text-white"
-                        >
-                          {selectedPosts.includes(post.id) ? (
-                            <CheckSquare className="h-5 w-5 text-indigo-600 dark:text-indigo-400" />
-                          ) : (
-                            <Square className="h-5 w-5" />
-                          )}
-                        </button>
-                      </td>
-                      <td className="px-6 py-4">
                         <div className="flex items-center gap-3">
-                          {post.featured_image && (
-                            <img
-                              src={`/storage/${post.featured_image}`}
-                              alt={post.title}
-                              className="h-10 w-10 rounded object-cover"
-                            />
-                          )}
+                          <div className="flex h-10 w-10 items-center justify-center rounded-full bg-gradient-to-br from-indigo-500 to-purple-600 text-sm font-semibold text-white">
+                            {user.name.charAt(0).toUpperCase()}
+                          </div>
                           <div>
                             <div className="font-medium text-gray-900 dark:text-white">
-                              {post.title}
+                              {user.name}
                             </div>
-                            <div className="text-sm text-gray-500 dark:text-gray-400">
-                              {post.slug}
+                            <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
+                              <Mail className="h-3 w-3" />
+                              {user.email}
                             </div>
                           </div>
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                          <User className="h-4 w-4" />
-                          {post.user.name}
+                        <div className="flex flex-wrap gap-1">
+                          {user.roles.map((role, idx) => (
+                            <span
+                              key={idx}
+                              className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getRoleBadgeColor(role)}`}
+                            >
+                              {role.charAt(0).toUpperCase() + role.slice(1)}
+                            </span>
+                          ))}
                         </div>
                       </td>
                       <td className="px-6 py-4">
-                        {post.category ? (
-                          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-                            <FolderOpen className="h-4 w-4" />
-                            {post.category.name}
-                          </div>
+                        {user.email_verified_at ? (
+                          <span className="inline-flex items-center gap-1 rounded-full bg-green-100 px-2.5 py-0.5 text-xs font-medium text-green-800 dark:bg-green-900/30 dark:text-green-300">
+                            <CheckCircle className="h-3 w-3" />
+                            Verified
+                          </span>
                         ) : (
-                          <span className="text-sm text-gray-400">Uncategorized</span>
+                          <span className="inline-flex items-center gap-1 rounded-full bg-orange-100 px-2.5 py-0.5 text-xs font-medium text-orange-800 dark:bg-orange-900/30 dark:text-orange-300">
+                            <XCircle className="h-3 w-3" />
+                            Unverified
+                          </span>
                         )}
-                      </td>
-                      <td className="px-6 py-4">
-                        <span
-                          className={`inline-flex items-center rounded-full px-2.5 py-0.5 text-xs font-medium ${getStatusBadgeColor(post.status)}`}
-                        >
-                          {post.status.charAt(0).toUpperCase() + post.status.slice(1)}
-                        </span>
                       </td>
                       <td className="px-6 py-4">
                         <div className="flex items-center gap-1 text-sm text-gray-500 dark:text-gray-400">
                           <Calendar className="h-3 w-3" />
-                          {new Date(post.created_at).toLocaleDateString()}
+                          {user.created_at}
                         </div>
                       </td>
                       <td className="px-6 py-4 text-right">
                         <div className="flex items-center justify-end gap-2">
                           <Link
-                            href={route('posts.show', post.id)}
+                            href={route('users.show', user.id)}
                             className="rounded-lg p-2 text-gray-600 transition-colors hover:bg-gray-100 dark:text-gray-400 dark:hover:bg-gray-700"
                             title="View"
                           >
                             <Eye className="h-4 w-4" />
                           </Link>
                           <Link
-                            href={route('posts.edit', post.id)}
+                            href={route('users.edit', user.id)}
                             className="rounded-lg p-2 text-indigo-600 transition-colors hover:bg-indigo-50 dark:text-indigo-400 dark:hover:bg-indigo-900/20"
                             title="Edit"
                           >
                             <Edit className="h-4 w-4" />
                           </Link>
                           <button
-                            onClick={() => openDeleteModal(post)}
+                            onClick={() => openDeleteModal(user)}
                             className="rounded-lg p-2 text-red-600 transition-colors hover:bg-red-50 dark:text-red-400 dark:hover:bg-red-900/20"
                             title="Delete"
                           >
@@ -701,20 +496,20 @@ export default function Index({ posts, categories, authors, statistics, filters 
                   ))
                 ) : (
                   <tr>
-                    <td colSpan={7} className="px-6 py-12 text-center">
-                      <FileText className="mx-auto h-12 w-12 text-gray-400" />
+                    <td colSpan={5} className="px-6 py-12 text-center">
+                      <UserIcon className="mx-auto h-12 w-12 text-gray-400" />
                       <h3 className="mt-2 text-sm font-semibold text-gray-900 dark:text-white">
-                        No posts found
+                        No users found
                       </h3>
                       <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
-                        Get started by creating a new post.
+                        Get started by creating a new user.
                       </p>
                       <Link
-                        href={route('posts.create')}
+                        href={route('users.create')}
                         className="mt-4 inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-500"
                       >
                         <Plus className="h-4 w-4" />
-                        New Post
+                        Add User
                       </Link>
                     </td>
                   </tr>
@@ -724,19 +519,19 @@ export default function Index({ posts, categories, authors, statistics, filters 
           </div>
 
           {/* Pagination */}
-          {posts.data.length > 0 && (
+          {users.data.length > 0 && (
             <div className="flex items-center justify-between border-t border-gray-200 bg-white px-4 py-3 dark:border-gray-700 dark:bg-gray-800 sm:px-6">
               <div className="flex flex-1 justify-between sm:hidden">
                 <button
-                  onClick={() => router.visit(posts.links[posts.current_page - 1]?.url || '#')}
-                  disabled={posts.current_page === 1}
+                  onClick={() => router.visit(users.links[users.current_page - 1]?.url || '#')}
+                  disabled={users.current_page === 1}
                   className="relative inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                 >
                   Previous
                 </button>
                 <button
-                  onClick={() => router.visit(posts.links[posts.current_page + 1]?.url || '#')}
-                  disabled={posts.current_page === posts.last_page}
+                  onClick={() => router.visit(users.links[users.current_page + 1]?.url || '#')}
+                  disabled={users.current_page === users.last_page}
                   className="relative ml-3 inline-flex items-center rounded-md border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50"
                 >
                   Next
@@ -747,17 +542,17 @@ export default function Index({ posts, categories, authors, statistics, filters 
                   <p className="text-sm text-gray-700 dark:text-gray-300">
                     Showing{' '}
                     <span className="font-medium">
-                      {(posts.current_page - 1) * posts.per_page + 1}
+                      {(users.current_page - 1) * users.per_page + 1}
                     </span>{' '}
                     to{' '}
                     <span className="font-medium">
-                      {Math.min(posts.current_page * posts.per_page, posts.total)}
+                      {Math.min(users.current_page * users.per_page, users.total)}
                     </span>{' '}
-                    of <span className="font-medium">{posts.total}</span> results
+                    of <span className="font-medium">{users.total}</span> results
                   </p>
                 </div>
                 <div className="flex gap-1">
-                  {posts.links.map((link, index) => (
+                  {users.links.map((link, index) => (
                     <button
                       key={index}
                       onClick={() => link.url && router.visit(link.url)}
@@ -776,31 +571,17 @@ export default function Index({ posts, categories, authors, statistics, filters 
         </div>
       </div>
 
-      {/* Single Delete Confirmation Modal */}
+      {/* Delete Confirmation Modal */}
       <ConfirmModal
         isOpen={deleteModal.isOpen}
         onClose={closeDeleteModal}
         onConfirm={handleDelete}
-        title="Delete Post"
-        message={`Are you sure you want to delete "${deleteModal.post?.title}"? This action cannot be undone and will permanently remove the post and all its associated data.`}
-        confirmText="Delete Post"
+        title="Delete User"
+        message={`Are you sure you want to delete "${deleteModal.user?.name}"? This action cannot be undone and will permanently remove the user and all their associated data.`}
+        confirmText="Delete User"
         cancelText="Cancel"
         type="danger"
         isLoading={deleteModal.isDeleting}
-        icon={<Trash2 className="h-6 w-6 text-red-600 dark:text-red-400" />}
-      />
-
-      {/* Bulk Delete Confirmation Modal */}
-      <ConfirmModal
-        isOpen={bulkDeleteModal.isOpen}
-        onClose={closeBulkDeleteModal}
-        onConfirm={handleBulkDelete}
-        title="Delete Multiple Posts"
-        message={`Are you sure you want to delete ${selectedPosts.length} post${selectedPosts.length !== 1 ? 's' : ''}? This action cannot be undone and will permanently remove all selected posts and their associated data.`}
-        confirmText={`Delete ${selectedPosts.length} Post${selectedPosts.length !== 1 ? 's' : ''}`}
-        cancelText="Cancel"
-        type="danger"
-        isLoading={bulkDeleteModal.isDeleting}
         icon={<Trash2 className="h-6 w-6 text-red-600 dark:text-red-400" />}
       />
     </AuthenticatedLayout>

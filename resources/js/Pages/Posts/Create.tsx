@@ -1,9 +1,10 @@
-import { useState, FormEvent } from 'react';
-import { Head, Link, router, useForm } from '@inertiajs/react';
+import { useState, useEffect, FormEvent } from 'react';
+import { Head, Link, router, useForm, usePage } from '@inertiajs/react';
 import AuthenticatedLayout from '@/Layouts/AuthenticatedLayout';
 import RichTextEditor from '@/Components/Posts/RichTextEditor';
 import ImageUpload from '@/Components/Posts/ImageUpload';
 import TagsInput from '@/Components/Posts/TagsInput';
+import toast from 'react-hot-toast';
 import axios from 'axios';
 import {
   Save,
@@ -26,6 +27,7 @@ interface Props {
 }
 
 export default function Create({ categories }: Props) {
+  const { flash } = usePage().props as any;
   const { data, setData, post, processing, errors, reset } = useForm({
     title: '',
     slug: '',
@@ -41,6 +43,16 @@ export default function Create({ categories }: Props) {
   const [aiPrompt, setAiPrompt] = useState('');
   const [aiLoading, setAiLoading] = useState(false);
   const [isSlugManuallyEdited, setIsSlugManuallyEdited] = useState(false);
+
+  // Show flash messages
+  useEffect(() => {
+    if (flash?.success) {
+      toast.success(flash.success);
+    }
+    if (flash?.error) {
+      toast.error(flash.error);
+    }
+  }, [flash]);
 
   const handleSubmit = (e: FormEvent, status?: string) => {
     e.preventDefault();
@@ -61,6 +73,13 @@ export default function Create({ categories }: Props) {
 
     post(route('posts.store'), {
       forceFormData: true,
+      onError: (errors) => {
+        // Show first error in toast
+        const firstError = Object.values(errors)[0];
+        if (firstError) {
+          toast.error(firstError as string);
+        }
+      },
     });
   };
 
@@ -96,33 +115,37 @@ export default function Create({ categories }: Props) {
 
   // AI Content Generation
   const handleAIGenerate = async () => {
-    if (!aiPrompt.trim()) return;
+    if (!aiPrompt.trim()) {
+      toast.error('Please enter a prompt');
+      return;
+    }
 
     setAiLoading(true);
     try {
       const response = await axios.post(route('ai.suggest'), {
         prompt: aiPrompt,
-        type: 'content', // Required parameter
-        context: data.title || '', // Optional: provide context
+        context: data.body,
       });
 
-      if (response.data.success && response.data.text) {
-        setData('body', data.body + '\n\n' + response.data.text);
+      if (response.data.content) {
+        setData('body', data.body + '\n\n' + response.data.content);
         setShowAIAssistant(false);
         setAiPrompt('');
+        toast.success('AI content generated!');
       }
     } catch (error: any) {
-      console.error('AI generation failed:', error);
-      const message = error.response?.data?.message || error.response?.data?.error || 'Failed to generate content';
-      alert(message);
+      toast.error(error.response?.data?.message || 'Failed to generate content');
     } finally {
       setAiLoading(false);
     }
   };
 
   return (
-    <AuthenticatedLayout
-      header={
+    <AuthenticatedLayout>
+      <Head title="Create Post" />
+
+      <div className="mx-auto max-w-4xl space-y-6 px-4 py-6 sm:px-6 lg:px-8">
+        {/* Header */}
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-4">
             <Link
@@ -132,122 +155,108 @@ export default function Create({ categories }: Props) {
               <ArrowLeft className="h-5 w-5" />
             </Link>
             <div>
-              <h2 className="text-2xl font-bold leading-tight text-gray-800 dark:text-gray-200">
-                Create New Post
-              </h2>
+              <h1 className="text-2xl font-bold text-gray-900 dark:text-white">Create Post</h1>
               <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
-                Write and publish your blog content
+                Write and publish your blog post
               </p>
             </div>
           </div>
         </div>
-      }
-    >
-      <Head title="Create Post" />
 
-      <div className="mx-auto max-w-7xl space-y-6">
-        <form onSubmit={(e) => handleSubmit(e)}>
-          <div className="grid gap-6 lg:grid-cols-3">
-            {/* Main Content Area */}
-            <div className="space-y-6 lg:col-span-2">
-              {/* Title and Slug */}
-              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <div className="space-y-4">
-                  <div>
-                    <label htmlFor="title" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Title *
-                    </label>
-                    <input
-                      type="text"
-                      id="title"
-                      value={data.title}
-                      onChange={(e) => handleTitleChange(e.target.value)}
-                      className="mt-1.5 w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                      placeholder="Enter post title..."
-                      required
-                    />
-                    {errors.title && (
-                      <p className="mt-1.5 text-sm text-red-600 dark:text-red-400">{errors.title}</p>
-                    )}
-                  </div>
-
-                  <div>
-                    <label htmlFor="slug" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Slug
-                    </label>
-                    <div className="relative mt-1.5">
-                      <input
-                        type="text"
-                        id="slug"
-                        value={data.slug}
-                        onChange={(e) => handleSlugChange(e.target.value)}
-                        className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 pr-24 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                        placeholder="auto-generated-from-title"
-                      />
-                      {isSlugManuallyEdited && (
-                        <button
-                          type="button"
-                          onClick={handleResetSlug}
-                          className="absolute right-2 top-1/2 -translate-y-1/2 rounded-md bg-gray-100 px-3 py-1 text-xs font-medium text-gray-700 transition-colors hover:bg-gray-200 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500"
-                          title="Reset to auto-generated slug"
-                        >
-                          Reset
-                        </button>
-                      )}
-                    </div>
-                    {errors.slug && (
-                      <p className="mt-1.5 text-sm text-red-600 dark:text-red-400">{errors.slug}</p>
-                    )}
-                    <p className="mt-1.5 text-xs text-gray-500 dark:text-gray-400">
-                      {isSlugManuallyEdited
-                        ? "Custom slug. Click 'Reset' to auto-generate from title."
-                        : "Auto-generated from title. Edit to customize."}
-                    </p>
-                  </div>
-                </div>
+        {/* Form */}
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Main Content Card */}
+          <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <div className="space-y-6">
+              {/* Title */}
+              <div>
+                <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                  Title <span className="text-red-500">*</span>
+                </label>
+                <input
+                  type="text"
+                  value={data.title}
+                  onChange={(e) => handleTitleChange(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                  placeholder="Enter post title..."
+                  required
+                />
+                {errors.title && (
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.title}</p>
+                )}
               </div>
 
-              {/* Rich Text Editor */}
-              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <div className="mb-3 flex items-center justify-between">
-                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                    Content *
+              {/* Slug */}
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Slug
+                  </label>
+                  {isSlugManuallyEdited && (
+                    <button
+                      type="button"
+                      onClick={handleResetSlug}
+                      className="text-xs text-indigo-600 hover:text-indigo-500 dark:text-indigo-400"
+                    >
+                      Reset to auto-generated
+                    </button>
+                  )}
+                </div>
+                <input
+                  type="text"
+                  value={data.slug}
+                  onChange={(e) => handleSlugChange(e.target.value)}
+                  className="w-full rounded-lg border border-gray-300 bg-white px-4 py-2 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                  placeholder="auto-generated-from-title"
+                />
+                {errors.slug && (
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.slug}</p>
+                )}
+              </div>
+
+              {/* Body with AI Assistant */}
+              <div>
+                <div className="mb-2 flex items-center justify-between">
+                  <label className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Content <span className="text-red-500">*</span>
                   </label>
                   <button
                     type="button"
                     onClick={() => setShowAIAssistant(!showAIAssistant)}
-                    className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-purple-600 to-indigo-600 px-3 py-1.5 text-sm font-medium text-white transition-all hover:from-purple-700 hover:to-indigo-700"
+                    className="inline-flex items-center gap-2 rounded-lg bg-gradient-to-r from-purple-600 to-pink-600 px-3 py-1.5 text-xs font-semibold text-white transition-all hover:from-purple-700 hover:to-pink-700"
                   >
-                    <Sparkles className="h-4 w-4" />
+                    <Sparkles className="h-3 w-3" />
                     AI Assistant
                   </button>
                 </div>
 
+                {/* AI Assistant Panel */}
                 {showAIAssistant && (
-                  <div className="mb-4 rounded-lg border border-purple-200 bg-purple-50 p-4 dark:border-purple-700 dark:bg-purple-900/20">
-                    <h4 className="mb-2 text-sm font-semibold text-purple-900 dark:text-purple-300">
+                  <div className="mb-4 rounded-lg border border-purple-200 bg-purple-50 p-4 dark:border-purple-800 dark:bg-purple-900/20">
+                    <div className="mb-3 flex items-center gap-2 text-sm font-medium text-purple-900 dark:text-purple-100">
+                      <Sparkles className="h-4 w-4" />
                       AI Content Generator
-                    </h4>
+                    </div>
                     <textarea
                       value={aiPrompt}
                       onChange={(e) => setAiPrompt(e.target.value)}
                       placeholder="Describe what you want to write about..."
-                      className="w-full rounded-lg border border-purple-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 dark:border-purple-600 dark:bg-gray-700 dark:text-white"
+                      className="mb-3 w-full rounded-lg border border-purple-300 bg-white px-3 py-2 text-sm text-gray-900 focus:border-purple-500 focus:ring-2 focus:ring-purple-500/20 dark:border-purple-700 dark:bg-gray-800 dark:text-white"
                       rows={3}
                     />
-                    <div className="mt-2 flex gap-2">
+                    <div className="flex gap-2">
                       <button
                         type="button"
                         onClick={handleAIGenerate}
                         disabled={aiLoading || !aiPrompt.trim()}
-                        className="rounded-lg bg-purple-600 px-4 py-2 text-sm font-medium text-white transition-colors hover:bg-purple-700 disabled:opacity-50"
+                        className="flex-1 rounded-lg bg-purple-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-purple-700 disabled:opacity-50"
                       >
-                        {aiLoading ? 'Generating...' : 'Generate'}
+                        {aiLoading ? 'Generating...' : 'Generate Content'}
                       </button>
                       <button
                         type="button"
                         onClick={() => setShowAIAssistant(false)}
-                        className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
+                        className="rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300"
                       >
                         Cancel
                       </button>
@@ -257,135 +266,134 @@ export default function Create({ categories }: Props) {
 
                 <RichTextEditor
                   content={data.body}
-                  onChange={(content) => setData('body', content)}
+                  onChange={(value) => setData('body', value)}
                 />
                 {errors.body && (
-                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.body}</p>
+                  <p className="mt-1 text-sm text-red-600 dark:text-red-400">{errors.body}</p>
                 )}
               </div>
             </div>
+          </div>
 
-            {/* Sidebar */}
-            <div className="space-y-6">
-              {/* Publish Settings */}
-              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-                  Publish Settings
-                </h3>
-                <div className="space-y-4">
-                  <div>
-                    <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                      Status
-                    </label>
-                    <select
-                      id="status"
-                      value={data.status}
-                      onChange={(e) => setData('status', e.target.value as 'draft' | 'published' | 'archived')}
-                      className="mt-1.5 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                    >
-                      <option value="draft">Draft</option>
-                      <option value="published">Published</option>
-                      <option value="archived">Archived</option>
-                    </select>
-                  </div>
+          {/* Sidebar */}
+          <div className="space-y-6">
+            {/* Featured Image */}
+            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+              <h3 className="mb-4 text-sm font-semibold text-gray-900 dark:text-white">
+                Featured Image
+              </h3>
+              <ImageUpload
+                image={data.featured_image}
+                onChange={(file) => setData('featured_image', file)}
+                onRemove={() => setData('featured_image', null)}
+              />
+              {errors.featured_image && (
+                <p className="mt-2 text-sm text-red-600 dark:text-red-400">
+                  {errors.featured_image}
+                </p>
+              )}
+            </div>
 
-                  {data.status === 'published' && (
-                    <div>
-                      <label htmlFor="published_at" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                        Publish Date
-                      </label>
-                      <input
-                        type="datetime-local"
-                        id="published_at"
-                        value={data.published_at}
-                        onChange={(e) => setData('published_at', e.target.value)}
-                        className="mt-1.5 w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                      />
-                    </div>
-                  )}
-
-                  <div className="space-y-2 border-t border-gray-200 pt-4 dark:border-gray-700">
-                    <button
-                      type="submit"
-                      disabled={processing}
-                      className="flex w-full items-center justify-center gap-2 rounded-lg bg-gradient-to-r from-indigo-600 to-purple-600 px-4 py-2.5 text-sm font-semibold text-white shadow-md transition-all hover:from-indigo-700 hover:to-purple-700 disabled:opacity-50"
-                    >
-                      <Save className="h-4 w-4" />
-                      {processing ? 'Saving...' : 'Save Post'}
-                    </button>
-
-                    {data.status === 'draft' && (
-                      <button
-                        type="button"
-                        onClick={(e) => handleSubmit(e as any, 'published')}
-                        disabled={processing}
-                        className="flex w-full items-center justify-center gap-2 rounded-lg border border-green-300 bg-green-50 px-4 py-2.5 text-sm font-semibold text-green-700 transition-all hover:bg-green-100 disabled:opacity-50 dark:border-green-600 dark:bg-green-900/30 dark:text-green-400 dark:hover:bg-green-900/50"
-                      >
-                        <Send className="h-4 w-4" />
-                        Save & Publish
-                      </button>
-                    )}
-
-                    <Link
-                      href={route('posts.index')}
-                      className="flex w-full items-center justify-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-200 dark:hover:bg-gray-600"
-                    >
-                      <X className="h-4 w-4" />
-                      Cancel
-                    </Link>
-                  </div>
+            {/* Post Settings */}
+            <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+              <h3 className="mb-4 text-sm font-semibold text-gray-900 dark:text-white">
+                Post Settings
+              </h3>
+              <div className="space-y-4">
+                {/* Category */}
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Category
+                  </label>
+                  <select
+                    value={data.category_id}
+                    onChange={(e) => setData('category_id', e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                  >
+                    <option value="">Select category</option>
+                    {categories.map((category) => (
+                      <option key={category.id} value={category.id}>
+                        {category.name}
+                      </option>
+                    ))}
+                  </select>
                 </div>
-              </div>
 
-              {/* Category */}
-              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-                  Category
-                </h3>
-                <select
-                  value={data.category_id}
-                  onChange={(e) => setData('category_id', e.target.value)}
-                  className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
-                >
-                  <option value="">Uncategorized</option>
-                  {categories.map((category) => (
-                    <option key={category.id} value={category.id}>
-                      {category.name}
-                    </option>
-                  ))}
-                </select>
-                {errors.category_id && (
-                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.category_id}</p>
+                {/* Tags */}
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Tags
+                  </label>
+                  <TagsInput
+                    tags={data.tags}
+                    onChange={(tags) => setData('tags', tags)}
+                  />
+                </div>
+
+                {/* Status */}
+                <div>
+                  <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                    Status
+                  </label>
+                  <select
+                    value={data.status}
+                    onChange={(e) => setData('status', e.target.value)}
+                    className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                  >
+                    <option value="draft">Draft</option>
+                    <option value="published">Published</option>
+                    <option value="archived">Archived</option>
+                  </select>
+                </div>
+
+                {/* Publish Date (optional) */}
+                {data.status === 'published' && (
+                  <div>
+                    <label className="mb-2 block text-sm font-medium text-gray-700 dark:text-gray-300">
+                      Publish Date
+                    </label>
+                    <input
+                      type="datetime-local"
+                      value={data.published_at}
+                      onChange={(e) => setData('published_at', e.target.value)}
+                      className="w-full rounded-lg border border-gray-300 bg-white px-3 py-2 text-gray-900 focus:border-indigo-500 focus:ring-2 focus:ring-indigo-500/20 dark:border-gray-600 dark:bg-gray-700 dark:text-white"
+                    />
+                  </div>
                 )}
               </div>
+            </div>
+          </div>
 
-              {/* Tags */}
-              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-                  Tags
-                </h3>
-                <TagsInput
-                  tags={data.tags}
-                  onChange={(tags) => setData('tags', tags)}
-                />
-                {errors.tags && (
-                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.tags}</p>
-                )}
-              </div>
+          {/* Action Buttons */}
+          <div className="flex items-center justify-between gap-4 rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
+            <Link
+              href={route('posts.index')}
+              className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-medium text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+            >
+              <X className="h-4 w-4" />
+              Cancel
+            </Link>
 
-              {/* Featured Image */}
-              <div className="rounded-xl border border-gray-200 bg-white p-6 shadow-sm dark:border-gray-700 dark:bg-gray-800">
-                <h3 className="mb-4 text-lg font-semibold text-gray-900 dark:text-white">
-                  Featured Image
-                </h3>
-                <ImageUpload
-                  image={data.featured_image}
-                  onChange={(file) => setData('featured_image', file)}
-                />
-                {errors.featured_image && (
-                  <p className="mt-2 text-sm text-red-600 dark:text-red-400">{errors.featured_image}</p>
-                )}
-              </div>
+            <div className="flex gap-2">
+              <button
+                type="button"
+                onClick={(e) => handleSubmit(e, 'draft')}
+                disabled={processing}
+                className="inline-flex items-center gap-2 rounded-lg border border-gray-300 bg-white px-4 py-2 text-sm font-semibold text-gray-700 transition-colors hover:bg-gray-50 disabled:opacity-50 dark:border-gray-600 dark:bg-gray-700 dark:text-gray-300 dark:hover:bg-gray-600"
+              >
+                <Save className="h-4 w-4" />
+                Save Draft
+              </button>
+
+              <button
+                type="button"
+                onClick={(e) => handleSubmit(e, 'published')}
+                disabled={processing}
+                className="inline-flex items-center gap-2 rounded-lg bg-indigo-600 px-4 py-2 text-sm font-semibold text-white transition-colors hover:bg-indigo-500 disabled:opacity-50"
+              >
+                <Send className="h-4 w-4" />
+                Publish
+              </button>
             </div>
           </div>
         </form>
