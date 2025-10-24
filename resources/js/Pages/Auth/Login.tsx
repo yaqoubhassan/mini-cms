@@ -64,6 +64,29 @@ export default function Login({
                             </p>
                         </div>
 
+                        {/* Back to Home Link */}
+                        <div className="mb-6 text-center">
+                            <Link
+                                href={route('landing')}
+                                className="inline-flex items-center gap-2 text-sm text-gray-600 hover:text-indigo-600 transition-colors"
+                            >
+                                <svg
+                                    className="w-4 h-4"
+                                    fill="none"
+                                    stroke="currentColor"
+                                    viewBox="0 0 24 24"
+                                >
+                                    <path
+                                        strokeLinecap="round"
+                                        strokeLinejoin="round"
+                                        strokeWidth={2}
+                                        d="M10 19l-7-7m0 0l7-7m-7 7h18"
+                                    />
+                                </svg>
+                                Back to Home
+                            </Link>
+                        </div>
+
                         {/* Status Message */}
                         {status && (
                             <div className="mb-4 p-4 rounded-lg bg-green-50 border border-green-200">
